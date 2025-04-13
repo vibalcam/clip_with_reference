@@ -29,13 +29,13 @@ The following command trains a ViT-B/16 CLIP model using FastCLIP on DFN on 2 GP
 ```bash
 export PYTHONPATH="$PYTHONPATH:$PWD/src"
 export HUGGINGFACE_HUB_CACHE='./checkpoints/huggingface'
-export CUDA_VISIBLE_DEVICES=1,2
+export CUDA_VISIBLE_DEVICES=0,1,3,4,5,6,7,9
 
 effective_batch_size=640
 num_gpus=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 batch_size=$((${effective_batch_size} / ${num_gpus}))
 run=true
-exp_name=fastclipv3_dive7_v3
+exp_name=fastclipv3_dive5_v2
 
 
 if [ ${batch_size} -lt 1 ]; then
@@ -92,7 +92,7 @@ And modify the training pipeline accordingly. `ref_model` is an instance of `CLI
 
 **Data**:
 ```bash
-git clone -b project git@github.com:xywei00/datacomp.git
+git clone https://github.com/xywei00/datacomp.git
 python ./datacomp/download_evalsets.py ./datasets/datacomp
 ```
 
@@ -102,7 +102,7 @@ To evaluate a trained CLIP model, run the following command:
 train_output_dir='./logs/fastclipv3'
 data_dir='./datasets/datacomp'
 arch='ViT-B-16'
-epoch=10
+epoch=30  # use last ckpt
 
 python ./datacomp/evaluate.py --train_output_dir "${train_output_dir}" --data_dir "${data_dir}" --epoch "${epoch}" --arch "${arch}"
 ```
