@@ -7,10 +7,10 @@ In this repo, we show how to train a CLIP model by using Global Contrastive Loss
 Setting up a new virtual environment with Conda:
 ````bash
 env_name='fastclip'
-conda create -n "$env_name" python=3.11
+conda create -n "$env_name" python=3.11 -y
 conda activate "$env_name"
-pip install -r requirements-training.txt
-pip install -r requirements-eval.txt
+python -m pip install -r requirements-training.txt
+python -m pip install -r requirements-eval.txt
 ````
 
 ### Training
@@ -29,26 +29,53 @@ The following command trains a ViT-B/16 CLIP model using FastCLIP on DFN on 2 GP
 ```bash
 export PYTHONPATH="$PYTHONPATH:$PWD/src"
 export HUGGINGFACE_HUB_CACHE='./checkpoints/huggingface'
+export CUDA_VISIBLE_DEVICES=1,2
 
-torchrun \
-    --nproc_per_node=2 --nnodes=1 --node_rank=0 \
-    --rdzv-id=4204 --rdzv-backend=c10d --rdzv-endpoint='127.0.0.1' \
-    src/training/main.py \
-    --save-frequency 1 \
-    --train-data './datasets/dfn_data/00000{000..139}.tar' \
-    --train-num-samples 1000000 --data_size 1400000 \
-    --warmup 500 \
-    --batch-size 320 \
-    --epochs 30 \
-    --workers 6 \
-    --model ViT-B-16 \
-    --name fastclipv3 \
-    --seed 2025 \
-    --wd 0.2 \
-    --local-loss \
-    --fastclip --multiply_tau --temperature_scheme global_learnable \
-    --lr 3.125e-4 --lr_tau 7.8125e-5 --lr_tau_scheduler step_thresh --rho 11.0 \
-    --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 30
+effective_batch_size=640
+num_gpus=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
+batch_size=$((${effective_batch_size} / ${num_gpus}))
+run=true
+exp_name=fastclipv3_dive7_v3
+
+
+if [ ${batch_size} -lt 1 ]; then
+    echo "batch size ${batch_size} is invalid"
+    run=false
+fi
+if [ ${effective_batch_size} -ne $(( ${batch_size} * ${num_gpus} )) ]; then
+    echo "batch size ${batch_size} times number of devices ${num_gpus} is not equal to effective batch size ${effective_batch_size}"
+    run=false
+fi
+
+
+if [ $run = true ]; then
+    cmd="python -m torch.distributed.run \
+        --nproc_per_node=${num_gpus} --nnodes=1 --node_rank=0 \
+        --rdzv-id=4204 --rdzv-backend=c10d --rdzv-endpoint='127.0.0.1' \
+        src/training/main.py \
+        --save-frequency 1 \
+        --train-data './datasets/dfn_data/00000{000..139}.tar' \
+        --train-num-samples 1000000 --data_size 1400000 \
+        --warmup 500 \
+        --batch-size ${batch_size} \
+        --epochs 30 \
+        --workers 6 \
+        --model ViT-B-16 \
+        --name ${exp_name} \
+        --seed 2025 \
+        --wd 0.2 \
+        --local-loss \
+        --fastclip --multiply_tau --temperature_scheme global_learnable \
+        --lr 3.125e-4 --lr_tau 7.8125e-5 --lr_tau_scheduler step_thresh --rho 11.0 \
+        --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 30 \
+        --report-to tensorboard"
+    echo $cmd
+    eval $cmd
+fi
+```
+
+```
+/data/jacob/anaconda3/envs/fastclip/bin/tensorboard --logdir . --port 6007
 ```
 
 In src/training/main.py, we create the model, optimizer, loss, dataloader, etc. And in src/training/train.py, we do the training step by step.

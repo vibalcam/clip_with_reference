@@ -6,6 +6,8 @@ results/
 checkpoints/
 logs/
 
+datasets/
+
 tests/data/
 *.pt
 
