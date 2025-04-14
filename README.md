@@ -29,13 +29,13 @@ The following command trains a ViT-B/16 CLIP model using FastCLIP on DFN on 2 GP
 ```bash
 export PYTHONPATH="$PYTHONPATH:$PWD/src"
 export HUGGINGFACE_HUB_CACHE='./checkpoints/huggingface'
-export CUDA_VISIBLE_DEVICES=0,1,3,4,5,6,7,9
+export CUDA_VISIBLE_DEVICES=0,1
 
 effective_batch_size=640
 num_gpus=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 batch_size=$((${effective_batch_size} / ${num_gpus}))
 run=true
-exp_name=fastclipv3_dive5_v1
+exp_name=fastclipv3_dive5_v5
 
 
 if [ ${batch_size} -lt 1 ]; then
@@ -68,7 +68,7 @@ if [ $run = true ]; then
         --fastclip --multiply_tau --temperature_scheme global_learnable \
         --lr 3.125e-4 --lr_tau 7.8125e-5 --lr_tau_scheduler step_thresh --rho 11.0 \
         --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 30 \
-        --report-to tensorboard"
+        --report-to tensorboard --grad-checkpointing"
     echo $cmd
     eval $cmd
 fi
