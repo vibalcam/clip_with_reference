@@ -8,7 +8,7 @@ import torch
 from clip_benchmark.datasets.builder import image_captions_collate_fn
 from clip_benchmark.metrics import zeroshot_retrieval as zsr
 
-from .wds_eval import create_model
+from .wds_eval import get_model_transforms
 
 
 class RetrievalDataset(torch.utils.data.Dataset):
@@ -28,11 +28,13 @@ class RetrievalDataset(torch.utils.data.Dataset):
 
 
 def evaluate_retrieval_dataset(
-    task, model_arch, model_path, data_root=None, batch_size=64, num_workers=4
+    task, model_arch, model_path, data_root=None, batch_size=64, num_workers=4, model=None
 ):
     """Evaluate CLIP model on retrieval task."""
 
-    model, transform, device = create_model(model_arch, model_path)
+    # Create model
+    model, transform, device = get_model_transforms(model_arch=model_arch, model=model, model_path=model_path)
+
     tokenizer = open_clip.get_tokenizer(model_arch)
 
     dataset = RetrievalDataset(

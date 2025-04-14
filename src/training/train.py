@@ -19,6 +19,11 @@ from .distributed import is_master, all_gather_tuple_tensor
 from .zero_shot import zero_shot_eval
 from .precision import get_autocast
 
+import sys
+sys.path.append("../..")
+from datacomp.eval_utils.retr_eval import evaluate_retrieval_dataset
+from datacomp.eval_utils.wds_eval import evaluate_webdataset
+
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -292,6 +297,33 @@ def evaluate(model, data, epoch, args, tb_writer=None):
         return metrics
     device = torch.device(args.device)
     model.eval()
+
+    mscoco_metrics = evaluate_retrieval_dataset(
+        task='retrieval/mscoco_2014_5k_test_image_text_retrieval',
+        model_arch=args.model,
+        model_path=None,
+        data_root='./datasets/datacomp',
+        batch_size=64,
+        num_workers=4,
+        model=model,
+    )
+    mscoco_metrics = {f"mscoco/{k}": v for k, v in mscoco_metrics.items()}
+    metrics.update(mscoco_metrics)
+
+    imagenet_metrics = evaluate_webdataset(
+        task="imagenet1k",
+        model_arch=args.model,
+        model_path=None,
+        data_root='./datasets/datacomp',
+        dataset_len=50000,
+        batch_size=64,
+        num_workers=4,
+        return_preds=False,
+        return_topk=False,
+        model=model,
+    )
+    imagenet_metrics = {f"imagenet1k/{k}": v for k, v in imagenet_metrics.items()}
+    metrics.update(imagenet_metrics)
 
     zero_shot_metrics = zero_shot_eval(model, data, epoch, args)
     metrics.update(zero_shot_metrics)
