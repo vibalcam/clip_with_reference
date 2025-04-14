@@ -529,7 +529,7 @@ def main(args):
 
         # if any(v in data for v in ('val', 'imagenet-val', 'imagenet-v2')):
         #     evaluate(model, data, completed_epoch, args, writer)
-        evaluate(model, [], completed_epoch, args, writer)
+        evaluate(unwrap_model(model), [], completed_epoch, args, writer)
 
         # Saving checkpoints.
         if args.save_logs:
