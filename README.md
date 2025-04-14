@@ -35,7 +35,7 @@ effective_batch_size=640
 num_gpus=$(echo $CUDA_VISIBLE_DEVICES | tr ',' '\n' | wc -l)
 batch_size=$((${effective_batch_size} / ${num_gpus}))
 run=true
-exp_name=fastclipv3_dive5_v3
+exp_name=fastclipv3_dive5_v1
 
 
 if [ ${batch_size} -lt 1 ]; then
