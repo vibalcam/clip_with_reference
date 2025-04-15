@@ -35,7 +35,7 @@ from training.distributed import is_master, init_distributed_device, broadcast_o
 from training.logger import setup_logging
 from training.params import parse_args
 from training.scheduler import cosine_lr, const_lr, const_lr_cooldown, step_lr_thresh
-from training.train import train_one_epoch, evaluate
+from training.train import train_one_epoch, evaluate, unwrap_model
 from training.file_utils import pt_load, check_exists, start_sync_process, remote_sync
 from training.optimizer import LAMB
 
@@ -514,7 +514,9 @@ def main(args):
         )
     else:
         prof = None
-
+  
+    evaluate(unwrap_model(model), [], 0, args, writer)
+    writer.flush()
     for epoch in range(start_epoch, args.epochs):
         if args.stop_epochs > 0 and epoch >= args.stop_epochs:
             logging.info(f'Stop training at epoch {epoch}.')
@@ -526,8 +528,9 @@ def main(args):
                         tb_writer=writer, profiler=prof)
         completed_epoch = epoch + 1
 
-        if any(v in data for v in ('val', 'imagenet-val', 'imagenet-v2')):
-            evaluate(model, data, completed_epoch, args, writer)
+        # if any(v in data for v in ('val', 'imagenet-val', 'imagenet-v2')):
+        #     evaluate(model, data, completed_epoch, args, writer)
+        evaluate(unwrap_model(model), [], completed_epoch, args, writer)
 
         # Saving checkpoints.
         if args.save_logs:

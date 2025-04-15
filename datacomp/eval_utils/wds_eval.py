@@ -8,6 +8,20 @@ from clip_benchmark.datasets.builder import build_dataset
 from clip_benchmark.metrics import zeroshot_classification as zsc
 from sklearn.metrics import balanced_accuracy_score
 
+def get_model_transforms(model_arch, model, model_path):
+    assert model is not None or model_path is not None
+
+    if model is None:
+        model, transform, device = create_model(model_arch, model_path)
+    else:
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        pp_cfg = open_clip.transform.PreprocessCfg(**{'size': (224, 224), 'mode': 'RGB', 'mean': (0.48145466, 0.4578275, 0.40821073), 'std': (0.26862954, 0.26130258, 0.27577711), 'interpolation': 'bicubic', 'resize_mode': 'shortest', 'fill_color': 0})
+        transform = open_clip.transform.image_transform_v2(
+            pp_cfg,
+            is_train=False,
+        )
+
+    return model, transform, device
 
 def create_model(model_arch, model_path):
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -53,18 +67,19 @@ def create_webdataset(
 def evaluate_webdataset(
     task,
     model_arch,
-    model_path,
+    model_path=None,
     data_root=None,
     dataset_len=None,
     batch_size=64,
     num_workers=4,
     return_preds=False,
     return_topk=False,
+    model=None
 ):
     """Evaluate CLIP model on classification task."""
 
     # Create model
-    model, transform, device = create_model(model_arch, model_path)
+    model, transform, device = get_model_transforms(model_arch=model_arch, model=model, model_path=model_path)
 
     # Load data
     dataset, dataloader = create_webdataset(
