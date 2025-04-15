@@ -107,13 +107,13 @@
 #   random_score: 0.037604
 #   tags: []
 
-# # ImageNet 1k
-# imagenet1k:
-#   name: ImageNet 1k
-#   size: 50000
-#   time: 136
-#   num_classes: 1000
-#   random_score: 0.001000
+# ImageNet 1k
+imagenet1k:
+  name: ImageNet 1k
+  size: 50000
+  time: 136
+  num_classes: 1000
+  random_score: 0.001000
 
 # # ImageNet Sketch
 # imagenet_sketch:
