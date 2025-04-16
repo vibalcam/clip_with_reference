@@ -19,8 +19,6 @@ from .distributed import is_master, all_gather_tuple_tensor
 from .zero_shot import zero_shot_eval
 from .precision import get_autocast
 
-import sys
-sys.path.append("../..")
 from datacomp.eval_utils.retr_eval import evaluate_retrieval_dataset
 from datacomp.eval_utils.wds_eval import evaluate_webdataset
 
@@ -302,7 +300,7 @@ def evaluate(model, data, epoch, args, tb_writer=None):
         task='retrieval/mscoco_2014_5k_test_image_text_retrieval',
         model_arch=args.model,
         model_path=None,
-        data_root='./datasets/datacomp',
+        data_root=args.datacomp_root,
         batch_size=args.batch_size,
         num_workers=args.workers,
         model=model,
@@ -314,7 +312,7 @@ def evaluate(model, data, epoch, args, tb_writer=None):
         task="imagenet1k",
         model_arch=args.model,
         model_path=None,
-        data_root='./datasets/datacomp',
+        data_root=args.datacomp_root,
         dataset_len=50000,
         batch_size=args.batch_size,
         num_workers=args.workers,
