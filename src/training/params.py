@@ -32,6 +32,12 @@ def parse_args(args):
         help="Path to file(s) with training data. When using webdataset, multiple datasources can be combined using the `::` separator.",
     )
     parser.add_argument(
+        "--datacomp-path",
+        type=str,
+        help="Path to datacomp directory",
+        required=True
+    )
+    parser.add_argument(
         "--train-data-upsampling-factors",
         type=str,
         default=None,
@@ -112,6 +118,12 @@ def parse_args(args):
         action="store_true",
         default=False,
         help="log files on local master, otherwise global master only.",
+    )
+    parser.add_argument(
+        "--skip-pretrain-eval",
+        action="store_true",
+        default=False,
+        help="Skip eval step before training starts"
     )
     parser.add_argument(
         "--name",
@@ -429,6 +441,19 @@ def parse_args(args):
         "--distill-pretrained",
         default=None,
         help='Which pre-trained weights to distill from, if any.'
+    )
+    parser.add_argument(
+        "--distill-mode",
+        type=str,
+        default=None,
+        help='Which distillation mode to use, if any.',
+        choices=['cross_entropy']
+    )
+    parser.add_argument(
+        "--distill-weight",
+        type=float,
+        default=None, 
+        help="Loss is convex combination of distillation and constrastive loss"
     )
     parser.add_argument(
         "--use-bnb-linear",

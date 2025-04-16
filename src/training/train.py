@@ -76,7 +76,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
     if args.fastclip:
         assert args.accum_freq == 1
         loss.adjust_hyperparams(epoch)
-    rank = torch.distributed.get_rank()
+    rank = torch.distributed.get_rank() if args.distributed else 0
     offset = rank * args.batch_size
 
     data['train'].set_epoch(0)
@@ -117,6 +117,7 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     with torch.no_grad():
                         dist_model_out = dist_model(images, texts)
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
+                    model_out["dist_features"] = [model_out["dist_image_features"], model_out["dist_text_features"]]
                 if args.fastclip:
                     features = [model_out["image_features"], model_out["text_features"]]
                     remote_features = all_gather_tuple_tensor(features, None)
@@ -142,9 +143,11 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     model_out.update(
                         {"offset": offset, "loss1": (loss1_im, loss1_tt), "u": u, "sim": sim})
                 losses = loss(**model_out, output_dict=True)
-
-                total_loss = sum(losses.values())
-                losses["loss"] = total_loss
+                if args.distill and args.fastclip:
+                    total_loss = losses["loss"]
+                else:
+                    total_loss = sum(losses.values())
+                    losses["loss"] = total_loss
 
             backward(total_loss, scaler)
         else:
@@ -300,7 +303,7 @@ def evaluate(model, data, epoch, args, tb_writer=None):
         task='retrieval/mscoco_2014_5k_test_image_text_retrieval',
         model_arch=args.model,
         model_path=None,
-        data_root=args.datacomp_root,
+        data_root=args.datacomp_path,
         batch_size=args.batch_size,
         num_workers=args.workers,
         model=model,
@@ -312,7 +315,7 @@ def evaluate(model, data, epoch, args, tb_writer=None):
         task="imagenet1k",
         model_arch=args.model,
         model_path=None,
-        data_root=args.datacomp_root,
+        data_root=args.datacomp_path,
         dataset_len=50000,
         batch_size=args.batch_size,
         num_workers=args.workers,

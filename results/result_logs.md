@@ -1,4 +1,4 @@
-# Vanilla CLIP
+# FastCLIP
 
 ```
 python -m torch.distributed.run --nproc_per_node=2 --nnodes=1 --node_rank=0 --rdzv-id=4204 --rdzv-backend=c10d --rdzv-endpoint='127.0.0.1' src/training/main.py --save-frequency 1 --train-data './datasets/dfn_data/00000{000..139}.tar' --train-num-samples 1000000 --data_size 1400000 --warmup 500 --batch-size 320 --epochs 30 --workers 6 --model ViT-B-16 --name fastclipv3_dive9_v1 --seed 2025 --wd 0.2 --local-loss --fastclip --multiply_tau --temperature_scheme global_learnable --lr 3.125e-4 --lr_tau 7.8125e-5 --lr_tau_scheduler step_thresh --rho 11.0 --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 30 --report-to tensorboard
@@ -33,3 +33,9 @@ CUDA_VISIBLE_DEVICES=7 python -m torch.distributed.run --nproc_per_node=1 --nnod
 ```
 
 ![alt text](tb/openAI/eval.png)
+
+# FastCLIP + 0.5 Cross Entropy Distillation
+
+```
+CUDA_VISIBLE_DEVICES=6,7 python -m torch.distributed.run --nproc_per_node=2 --nnodes=1 --node_rank=0 --rdzv-id=4204 --rdzv-backend=c10d --rdzv-endpoint='127.0.0.1' src/training/main.py --save-frequency 1 --train-data ./datasets/dfn_data/00000{000..139}.tar --datacomp-path ./datasets/datacomp --train-num-samples 1000000 --data_size 1400000 --warmup 500 --batch-size 320 --epochs 30 --workers 6 --model ViT-B-16 --distill-model ViT-B-32 --distill-pretrained openai --distill-mode cross_entropy --distill-weight 0.5 --name fastclip_dist0.5crossEntv0_dive9_v0 --seed 2025 --wd 0.2 --local-loss --fastclip --multiply_tau --temperature_scheme global_learnable --lr 3.125e-4 --lr_tau 7.8125e-5 --lr_tau_scheduler step_thresh --rho 11.0 --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 30 --report-to tensorboard
+```

@@ -104,11 +104,14 @@ class ClipLoss(nn.Module):
             labels = self.labels[device]
         return labels
 
-    def get_logits(self, image_features, text_features, logit_scale):
+    def get_logits(self, image_features, text_features, logit_scale, all_image_features=None, all_text_features=None):
         if self.world_size > 1:
-            all_image_features, all_text_features = gather_features(
-                image_features, text_features,
-                self.local_loss, self.gather_with_grad, self.rank, self.world_size, self.use_horovod)
+            if all_image_features is None and all_text_features is None:
+                all_image_features, all_text_features = gather_features(
+                    image_features, text_features,
+                    self.local_loss, self.gather_with_grad, self.rank, self.world_size, self.use_horovod)
+            else:
+                assert all_image_features is not None and all_text_features is not None
 
             if self.local_loss:
                 logits_per_image = logit_scale * image_features @ all_text_features.T
@@ -653,6 +656,94 @@ class FastCLIPLoss(nn.Module):
         else:
             return loss
 
+class FastCLIPDistillLoss(FastCLIPLoss, DistillClipLoss):
+
+    def __init__(self, 
+                 distill_mode, 
+                 distill_weight: float,
+                 # fast clip
+                 data_size: int,
+                 gamma: float,
+                 gamma_schedule: str = "constant",
+                 gamma_decay_epochs: int = -1,
+                 rho: float = 8.0,
+                 eps: float = 1e-14,
+                 multiply_tau: bool = True,
+                 cache_mask: bool = True,
+                 # clip
+                 device: torch.device = torch.device("cuda"),
+                 local_loss=False,
+                 gather_with_grad=False,
+                 cache_labels=False,
+                 rank=0,
+                 world_size=1,
+                 use_horovod=False):
+        fast_clip_args = {"data_size": data_size, "gamma": gamma, "gamma_schedule": gamma_schedule, "gamma_decay_epochs": gamma_decay_epochs, "rho": rho, "eps": eps, "multiply_tau": multiply_tau, 
+                          "cache_mask": cache_mask, "device": device}
+        clip_args = {"local_loss": local_loss, "gather_with_grad": gather_with_grad, "cache_labels": cache_labels, "rank": rank, "world_size": world_size, "use_horovod": use_horovod}
+        self.distill_mode = distill_mode
+        assert 0 <= distill_weight <= 1
+        self.distill_weight = distill_weight
+        FastCLIPLoss.__init__(self, **fast_clip_args)
+        DistillClipLoss.__init__(self, **clip_args)
+
+    def distill_loss(
+        self,
+        features: Tuple[Tensor, Tensor],
+        dist_features: Tuple[Tensor, Tensor],
+        logit_scale: Tensor,
+        dist_logit_scale: Tensor
+    ):
+        image_features, text_features = features
+        dist_image_features, dist_text_features = dist_features
+        if self.world_size > 1:
+            all_image_features, all_text_features = gather_features(
+                image_features, text_features,
+                self.local_loss, self.gather_with_grad, self.rank, self.world_size, self.use_horovod)
+            all_dist_image_features, all_dist_text_features = gather_features(
+                dist_image_features, dist_text_features,
+                self.local_loss, self.gather_with_grad, self.rank, self.world_size, self.use_horovod)
+
+        else:
+            all_image_features, all_text_features = image_features, text_features
+            all_dist_image_features, all_dist_text_features = dist_image_features, dist_text_features
+
+        match self.distill_mode:
+            case "cross_entropy":
+                logits_per_image, logits_per_text = \
+                    self.get_logits(image_features, text_features, logit_scale, all_image_features, all_text_features)
+                dist_logits_per_image, dist_logits_per_text = \
+                    self.get_logits(dist_image_features, dist_text_features, dist_logit_scale, all_dist_image_features, all_dist_text_features)
+                return (
+                    self.dist_loss(dist_logits_per_image, logits_per_image) +
+                    self.dist_loss(dist_logits_per_text, logits_per_text)
+                )
+            case _:
+                raise NotImplementedError(f"distill mode {self.distill_mode} not implemented")
+
+    def forward(self,
+                features: Tuple[Tensor, Tensor],
+                dist_features: Tuple[Tensor, Tensor],
+                remote_features: Tuple[Tensor, Tensor],
+                remote_u: Tuple[Tensor, Tensor],
+                loss1: Tuple[Tensor, Tensor],
+                u: Tuple[Tensor, Tensor],
+                sim: Tuple[Tensor, Tensor],
+                logit_scale: Tensor,
+                dist_logit_scale: Tensor,
+                offset: int,
+                output_dict: bool = False,
+                **kwargs
+                ):
+        
+        contrastive_loss = FastCLIPLoss.forward(self, features, remote_features, remote_u, loss1, u, sim, logit_scale, offset, output_dict=False)
+        distill_loss = self.distill_loss(features, dist_features, logit_scale, dist_logit_scale)
+
+        loss = (1 - self.distill_weight) * contrastive_loss + self.distill_weight * distill_loss
+        if output_dict:
+            return {"contrastive_loss": contrastive_loss, "distill_loss": distill_loss, "loss": loss}
+        else:
+            return contrastive_loss, distill_loss, loss
 
 class FastCLIPLossIndividual(FastCLIPLoss):
     def __init__(self,

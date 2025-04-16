@@ -13,7 +13,7 @@ from .constants import OPENAI_DATASET_MEAN, OPENAI_DATASET_STD
 from .model import CLIP, CustomTextCLIP, convert_weights_to_lp, convert_to_custom_text_state_dict,\
     resize_pos_embed, get_cast_dtype
 from .coca_model import CoCa
-from .loss import ClipLoss, DistillClipLoss, CoCaLoss, SigLipLoss, FastCLIPLoss, FastCLIPLossIndividual
+from .loss import ClipLoss, DistillClipLoss, CoCaLoss, SigLipLoss, FastCLIPLoss, FastCLIPLossIndividual, FastCLIPDistillLoss
 from .openai import load_openai_model
 from .pretrained import is_pretrained_cfg, get_pretrained_cfg, download_pretrained,\
     list_pretrained_tags_by_model, download_pretrained_from_hf
@@ -266,7 +266,7 @@ def create_model(
 
 
 def create_loss(args):
-    if args.distill:
+    if args.distill and not args.fastclip:
         return DistillClipLoss(
             local_loss=args.local_loss,
             gather_with_grad=args.gather_with_grad,
@@ -297,7 +297,14 @@ def create_loss(args):
                         "rho": args.rho, "gamma_schedule": args.gamma_schedule,
                         "gamma_decay_epochs": args.gamma_decay_epochs, "eps": args.fastclip_eps,
                         "multiply_tau": args.multiply_tau}
-        if "global" in args.temperature_scheme:
+        if args.distill:
+            loss_args.update({
+                "local_loss": args.local_loss, "gather_with_grad": args.gather_with_grad, "cache_labels": True, 
+                "rank": args.rank, "world_size": args.world_size, "use_horovod": args.horovod,
+                "distill_mode": args.distill_mode, "distill_weight": args.distill_weight
+            })
+            return FastCLIPDistillLoss(**loss_args)
+        elif "global" in args.temperature_scheme:
             return FastCLIPLoss(**loss_args)
         elif "individual" in args.temperature_scheme:
             loss_args.update({"tau_init": args.temperature, "lr_tau": args.lr_tau, "beta1_tau": args.beta1,
