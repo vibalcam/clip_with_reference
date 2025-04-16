@@ -1,0 +1,174 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "fastclip",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/src",
+            "module": "training.main",
+            "console": "integratedTerminal",
+            "env": {
+                "WORLD_SIZE": "1",
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "args": [
+                "--save-frequency", "1",
+                "--train-data", "../datasets/dfn_data/00000{000..139}.tar", 
+                "--datacomp-path", "../datasets/datacomp",
+                "--train-num-samples", "1000000", 
+                "--data_size", "1400000",
+                "--warmup", "500", 
+                "--batch-size", "32", 
+                "--epochs", "30", 
+                "--workers", "6", 
+                "--model", "ViT-B-16", 
+                "--name", "DEBUG", 
+                "--seed", "2025", 
+                "--wd", "0.2", 
+                "--local-loss", 
+                "--fastclip", 
+                "--multiply_tau", 
+                "--temperature_scheme", "global_learnable",
+                "--lr", "3.125e-4", 
+                "--lr_tau", "7.8125e-5", 
+                "--lr_tau_scheduler", "step_thresh", 
+                "--rho", "11.0", 
+                "--gamma", "0.9", 
+                "--gamma_schedule", "cosine", 
+                "--gamma_decay_epochs", "30", 
+                "--debug",
+                "--skip-pretrain-eval"
+            ]
+        },
+        {
+            "name": "clip",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/src",
+            "module": "training.main",
+            "console": "integratedTerminal",
+            "env": {
+                "WORLD_SIZE": "1",
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "args": [
+                "--save-frequency", "1",
+                "--train-data", "../datasets/dfn_data/00000{000..139}.tar", 
+                "--datacomp-path", "../datasets/datacomp",
+                "--train-num-samples", "1000000", 
+                "--data_size", "1400000",
+                "--warmup", "500", 
+                "--batch-size", "32", 
+                "--epochs", "30", 
+                "--workers", "6", 
+                "--model", "ViT-B-16", 
+                "--name", "DEBUG", 
+                "--seed", "2025", 
+                "--wd", "0.2", 
+                "--local-loss",
+                "--multiply_tau", 
+                "--temperature_scheme", "global_learnable",
+                "--lr", "3.125e-4", 
+                "--lr_tau", "7.8125e-5", 
+                "--lr_tau_scheduler", "step_thresh", 
+                "--rho", "11.0", 
+                "--gamma", "0.9", 
+                "--gamma_schedule", "cosine", 
+                "--gamma_decay_epochs", "30", 
+                "--debug",
+                "--skip-pretrain-eval"
+            ]
+        },
+        {
+            "name": "clip_distill",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/src",
+            "module": "training.main",
+            "console": "integratedTerminal",
+            "env": {
+                "WORLD_SIZE": "1",
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "args": [
+                "--save-frequency", "1",
+                "--train-data", "../datasets/dfn_data/00000{000..139}.tar", 
+                "--datacomp-path", "../datasets/datacomp",
+                "--train-num-samples", "1000000", 
+                "--data_size", "1400000",
+                "--warmup", "500", 
+                "--batch-size", "32", 
+                "--epochs", "30", 
+                "--workers", "6", 
+                "--model", "ViT-B-16", 
+                "--distill-model", "ViT-B-32",
+                "--distill-pretrained", "openai",
+                "--name", "DEBUG", 
+                "--seed", "2025", 
+                "--wd", "0.2", 
+                "--local-loss",
+                "--multiply_tau", 
+                "--temperature_scheme", "global_learnable",
+                "--lr", "3.125e-4", 
+                "--lr_tau", "7.8125e-5", 
+                "--lr_tau_scheduler", "step_thresh", 
+                "--rho", "11.0", 
+                "--gamma", "0.9", 
+                "--gamma_schedule", "cosine", 
+                "--gamma_decay_epochs", "30", 
+                "--debug",
+                "--skip-pretrain-eval"
+            ]
+        },
+        {
+            "name": "fastclip_distill",
+            "type": "debugpy",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/src",
+            "module": "training.main",
+            "console": "integratedTerminal",
+            "env": {
+                "WORLD_SIZE": "1",
+                "CUDA_VISIBLE_DEVICES": "0"
+            },
+            "args": [
+                "--save-frequency", "1",
+                "--train-data", "../datasets/dfn_data/00000{000..139}.tar", 
+                "--datacomp-path", "../datasets/datacomp",
+                "--train-num-samples", "1000000", 
+                "--data_size", "1400000",
+                "--warmup", "500", 
+                "--batch-size", "32", 
+                "--epochs", "30", 
+                "--workers", "6", 
+                "--model", "ViT-B-16", 
+                "--distill-model", "ViT-B-32",
+                "--distill-pretrained", "openai",
+                "--distill-mode", "feature",
+                "--distill-weight", "0.5",
+                "--name", "DEBUG", 
+                "--seed", "2025", 
+                "--wd", "0.2", 
+                "--fastclip", 
+                "--local-loss",
+                "--multiply_tau", 
+                "--temperature_scheme", "global_learnable",
+                "--lr", "3.125e-4", 
+                "--lr_tau", "7.8125e-5", 
+                "--lr_tau_scheduler", "step_thresh", 
+                "--rho", "11.0", 
+                "--gamma", "0.9", 
+                "--gamma_schedule", "cosine", 
+                "--gamma_decay_epochs", "30", 
+                "--debug",
+                "--skip-pretrain-eval"
+            ]
+        }
+
+    ]
+}

@@ -8,6 +8,7 @@ import random
 from datetime import datetime
 import functools
 import socket
+import subprocess
 
 import numpy as np
 import torch
@@ -109,10 +110,13 @@ def main(args):
         log_filename = f'out-{args.rank}' if args.log_local else 'out.log'
         args.log_path = os.path.join(log_base_path, log_filename)
         if os.path.exists(args.log_path) and not resume_latest and args.resume is None:
-            print(
-                "Error. Experiment already exists. Use --name {} to specify a new experiment."
-            )
-            return -1
+            if args.debug:
+                subprocess.run(f"rm -r {os.path.join(log_base_path, '*')}", shell=True)
+            else:
+                print(
+                    "Error. Experiment already exists. Use --name {} to specify a new experiment."
+                )
+                return -1
 
     # Setup text logger
     args.log_level = logging.DEBUG if args.debug else logging.INFO
@@ -515,8 +519,11 @@ def main(args):
     else:
         prof = None
   
-    evaluate(unwrap_model(model), [], 0, args, writer)
-    writer.flush()
+    if not args.skip_pretrain_eval:
+        evaluate(unwrap_model(model), [], 0, args, writer)
+    if is_master(args) and not args.debug:
+        assert writer is not None
+        writer.flush()
     for epoch in range(start_epoch, args.epochs):
         if args.stop_epochs > 0 and epoch >= args.stop_epochs:
             logging.info(f'Stop training at epoch {epoch}.')
