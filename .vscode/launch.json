@@ -14,7 +14,7 @@
             "console": "integratedTerminal",
             "env": {
                 "WORLD_SIZE": "1",
-                "CUDA_VISIBLE_DEVICES": "0"
+                "CUDA_VISIBLE_DEVICES": "8"
             },
             "args": [
                 "--save-frequency", "1",
@@ -42,7 +42,8 @@
                 "--gamma_schedule", "cosine", 
                 "--gamma_decay_epochs", "30", 
                 "--debug",
-                "--skip-pretrain-eval"
+                "--skip-pretrain-eval",
+                "--lock-text"
             ]
         },
         {
@@ -93,7 +94,7 @@
             "console": "integratedTerminal",
             "env": {
                 "WORLD_SIZE": "1",
-                "CUDA_VISIBLE_DEVICES": "0"
+                "CUDA_VISIBLE_DEVICES": "8"
             },
             "args": [
                 "--save-frequency", "1",
@@ -122,7 +123,7 @@
                 "--gamma_schedule", "cosine", 
                 "--gamma_decay_epochs", "30", 
                 "--debug",
-                "--skip-pretrain-eval"
+                "--skip-pretrain-eval",
             ]
         },
         {
@@ -134,7 +135,7 @@
             "console": "integratedTerminal",
             "env": {
                 "WORLD_SIZE": "1",
-                "CUDA_VISIBLE_DEVICES": "0"
+                "CUDA_VISIBLE_DEVICES": "8"
             },
             "args": [
                 "--save-frequency", "1",
@@ -166,7 +167,9 @@
                 "--gamma_schedule", "cosine", 
                 "--gamma_decay_epochs", "30", 
                 "--debug",
-                "--skip-pretrain-eval"
+                "--skip-pretrain-eval",
+                "--lock-text",
+                "--init-from-distilled"
             ]
         }
 
