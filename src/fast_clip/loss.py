@@ -718,6 +718,10 @@ class FastCLIPDistillLoss(FastCLIPLoss, DistillClipLoss):
                     self.dist_loss(dist_logits_per_image, logits_per_image) +
                     self.dist_loss(dist_logits_per_text, logits_per_text)
                 )
+            case "feature":
+                image_dist = (all_dist_image_features - all_image_features).norm(dim=-1).square().mean()
+                text_dist = (all_dist_text_features - all_text_features).norm(dim=-1).square().mean()
+                return image_dist + text_dist
             case _:
                 raise NotImplementedError(f"distill mode {self.distill_mode} not implemented")
 
