@@ -217,10 +217,33 @@ class CLIP(nn.Module):
             self.logit_bias = nn.Parameter(torch.ones([]) * init_logit_bias)
         else:
             self.logit_bias = None
+        self.text_tower_locked = False
 
     def lock_image_tower(self, unlocked_groups=0, freeze_bn_stats=False):
         # lock image tower as per LiT - https://arxiv.org/abs/2111.07991
         self.visual.lock(unlocked_groups=unlocked_groups, freeze_bn_stats=freeze_bn_stats)
+
+    def lock_text_tower(self, unlocked_layers: int = 0, freeze_layer_norm: bool = True):
+        self.lock_text_tower = True
+        self.logit_scale.requires_grad = False
+        if self.logit_bias is not None:
+            self.logit_bias.requires_grad = False
+        text_modules = [
+            "transformer",
+            "token_embedding",
+            "positional_embedding",
+            "ln_final",
+            "text_projection",
+        ]
+        for module_name in text_modules:
+            assert hasattr(self, module_name)
+            module = getattr(self, module_name)
+            if isinstance(module, nn.Module):
+                for param in module.parameters():
+                    param.requires_grad = False 
+            else:
+                assert isinstance(module, nn.Parameter)
+                module.requires_grad = False
 
     @torch.jit.ignore
     def set_grad_checkpointing(self, enable=True):
@@ -251,7 +274,15 @@ class CLIP(nn.Module):
             text: Optional[torch.Tensor] = None,
     ):
         image_features = self.encode_image(image, normalize=True) if image is not None else None
-        text_features = self.encode_text(text, normalize=True) if text is not None else None
+        if text is None:
+            text_features = None
+        else:
+            if self.text_tower_locked:
+                with torch.no_grad():
+                    text_features = self.encode_text(text, normalize=True)
+                text_features = text_features.detach()
+            else:
+                text_features = self.encode_text(text, normalize=True)
 
         if self.output_dict:
             out_dict = {

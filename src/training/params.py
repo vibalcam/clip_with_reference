@@ -456,6 +456,12 @@ def parse_args(args):
         help="Loss is convex combination of distillation and constrastive loss"
     )
     parser.add_argument(
+        "--init-from-distilled",
+        default=False,
+        action="store_true",
+        help='Initialize from distilled weights. Only works if --distill-model is set.'
+    )
+    parser.add_argument(
         "--use-bnb-linear",
         default=None,
         help='Replace the network linear layers from the bitsandbytes library. '

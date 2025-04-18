@@ -254,6 +254,17 @@ def main(args):
             precision=args.precision,
             output_dict=True,
         )
+        if args.init_from_distilled:
+            num_copied = 0
+            total = 0
+            for (param_name, param), (dist_param_name, dist_param) in zip(model.named_parameters(), dist_model.named_parameters()):
+                total += 1
+                assert param_name == dist_param_name, [param_name, dist_param_name]
+                if param.shape == dist_param.shape:
+                    param.data.copy_(dist_param.data)
+                    num_copied += 1
+            logging.info(f'Copied {num_copied}/{total} modules from teacher.')
+
     if args.use_bnb_linear is not None:
         print('=> using a layer from bitsandbytes.\n'
               '   this is an experimental feature which requires two extra pip installs\n'
