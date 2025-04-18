@@ -241,6 +241,12 @@ def parse_args(args):
         help="Freeze BatchNorm running stats in image tower for any locked layers.",
     )
     parser.add_argument(
+        "--lock-logit-scale",
+        default=False,
+        action='store_true',
+        help="Lock logit scale by disabling gradients.",
+    )
+    parser.add_argument(
         '--image-mean', type=float, nargs='+', default=None, metavar='MEAN',
         help='Override default image mean value of dataset')
     parser.add_argument(

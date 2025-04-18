@@ -168,8 +168,10 @@
                 "--gamma_decay_epochs", "30", 
                 "--debug",
                 "--skip-pretrain-eval",
-                "--lock-text",
-                "--init-from-distilled"
+                // "--lock-text",
+                // "--init-from-distilled",
+                "--temperature", "0.01",
+                "--lock-logit-scale"
             ]
         }
 

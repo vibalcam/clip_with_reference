@@ -294,6 +294,8 @@ def main(args):
         model.lock_text_tower(
             unlocked_layers=args.lock_text_unlocked_layers,
             freeze_layer_norm=args.lock_text_freeze_layer_norm)
+    if args.lock_logit_scale:
+        model.lock_logit_scale()
 
     if args.grad_checkpointing:
         model.set_grad_checkpointing()
