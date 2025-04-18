@@ -187,8 +187,18 @@ class CoCaLoss(ClipLoss):
 
 class DistillClipLoss(ClipLoss):
 
-    def dist_loss(self, teacher_logits, student_logits):
-        return -(teacher_logits.softmax(dim=1) * student_logits.log_softmax(dim=1)).sum(dim=1).mean(dim=0)
+    def dist_loss(self, teacher_logits, student_logits, distill_mode="cross_entropy"):          
+        match distill_mode:
+            case "cross_entropy":
+                return -(teacher_logits.softmax(dim=1) * student_logits.log_softmax(dim=1)).sum(dim=1).mean(dim=0)
+            case "kl":
+                    # teacher_log_probs = teacher_logits.log_softmax(dim=1)
+                teacher_probs = teacher_logits.softmax(dim=1)
+                student_log_probs = student_logits.log_softmax(dim=1)
+                return F.kl_div(input=student_log_probs, target=teacher_probs, reduction="batchmean")
+                # return (teacher_probs * (teacher_log_probs - student_log_probs)).sum(dim=-1).mean()
+            case _:
+                raise NotImplementedError
 
     def forward(
             self,
@@ -684,7 +694,7 @@ class FastCLIPDistillLoss(FastCLIPLoss, DistillClipLoss):
         self.distill_mode = distill_mode
         assert 0 <= distill_weight <= 1
         self.distill_weight = distill_weight
-        self.gather_all = world_size > 1 and distill_mode in ["cross_entropy"]
+        self.gather_all = world_size > 1 and distill_mode in ["cross_entropy", "kl"]
         FastCLIPLoss.__init__(self, **fast_clip_args)
         DistillClipLoss.__init__(self, **clip_args)
 
@@ -710,14 +720,14 @@ class FastCLIPDistillLoss(FastCLIPLoss, DistillClipLoss):
             all_dist_image_features, all_dist_text_features = dist_image_features, dist_text_features
 
         match self.distill_mode:
-            case "cross_entropy":
+            case "cross_entropy" | "kl":
                 logits_per_image, logits_per_text = \
                     self.get_logits(image_features, text_features, logit_scale, all_image_features, all_text_features)
                 dist_logits_per_image, dist_logits_per_text = \
                     self.get_logits(dist_image_features, dist_text_features, dist_logit_scale, all_dist_image_features, all_dist_text_features)
                 return (
-                    self.dist_loss(dist_logits_per_image, logits_per_image) +
-                    self.dist_loss(dist_logits_per_text, logits_per_text)
+                    self.dist_loss(dist_logits_per_image, logits_per_image, self.distill_mode) +
+                    self.dist_loss(dist_logits_per_text, logits_per_text, self.distill_mode)
                 )
             case "feature":
                 image_dist = (dist_image_features - image_features).norm(dim=-1).square().mean()

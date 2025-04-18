@@ -453,7 +453,7 @@ def parse_args(args):
         type=str,
         default=None,
         help='Which distillation mode to use, if any.',
-        choices=['cross_entropy', 'feature']
+        choices=['cross_entropy', 'feature', 'kl']
     )
     parser.add_argument(
         "--distill-weight",
