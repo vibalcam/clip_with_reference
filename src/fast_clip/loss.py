@@ -694,7 +694,7 @@ class FastCLIPDistillLoss(FastCLIPLoss, DistillClipLoss):
         self.distill_mode = distill_mode
         assert 0 <= distill_weight <= 1
         self.distill_weight = distill_weight
-        self.gather_all = world_size > 1 and distill_mode in ["cross_entropy", "kl"]
+        self.gather_all = world_size > 1 and distill_mode in ["cross_entropy", "kl", "interactive"]
         FastCLIPLoss.__init__(self, **fast_clip_args)
         DistillClipLoss.__init__(self, **clip_args)
 
@@ -725,10 +725,28 @@ class FastCLIPDistillLoss(FastCLIPLoss, DistillClipLoss):
                     self.get_logits(image_features, text_features, logit_scale, all_image_features, all_text_features)
                 dist_logits_per_image, dist_logits_per_text = \
                     self.get_logits(dist_image_features, dist_text_features, dist_logit_scale, all_dist_image_features, all_dist_text_features)
-                return (
+                total_loss = (
                     self.dist_loss(dist_logits_per_image, logits_per_image, self.distill_mode) +
                     self.dist_loss(dist_logits_per_text, logits_per_text, self.distill_mode)
-                )
+                ) / 2
+                return total_loss
+
+            case "interactive":
+                device = image_features.device
+                
+                logits_per_image, _ = \
+                    self.get_logits(image_features, dist_text_features, logit_scale, all_image_features, all_dist_text_features)
+                _, logits_per_text = \
+                    self.get_logits(dist_image_features, text_features, logit_scale, all_dist_image_features, all_text_features)
+                
+                labels = self.get_ground_truth(device, logits_per_image.shape[0])
+
+                total_loss = (
+                    F.cross_entropy(logits_per_image, labels) +
+                    F.cross_entropy(logits_per_text, labels)
+                ) / 2
+                return total_loss
+
             case "feature":
                 image_dist = (dist_image_features - image_features).norm(dim=-1).square().mean()
                 text_dist = (dist_text_features - text_features).norm(dim=-1).square().mean()
