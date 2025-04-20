@@ -28,6 +28,9 @@ cd -
 The following command trains a ViT-B/16 CLIP model using FastCLIP on DFN on 2 GPUs, with (per-GPU) batch size 320 for 30 epochs:
 ```bash
 export PYTHONPATH="$PYTHONPATH:$PWD/src"
+export NCCL_P2P_LEVEL=NVL
+export CUDA_DEVICE_ORDER=PCI_BUS_ID
+
 export HUGGINGFACE_HUB_CACHE='./checkpoints/huggingface'
 export CUDA_VISIBLE_DEVICES=2,6
 
@@ -55,6 +58,7 @@ if [ $run = true ]; then
         src/training/main.py \
         --save-frequency 1 \
         --train-data './datasets/dfn_data/00000{000..139}.tar' \
+        --datacomp-path ./datasets/datacomp \
         --train-num-samples 1000000 --data_size 1400000 \
         --warmup 500 \
         --batch-size ${batch_size} \

@@ -219,6 +219,11 @@ class CLIP(nn.Module):
             self.logit_bias = None
         self.text_tower_locked = False
 
+    def lock_logit_scale(self):
+        self.logit_scale.requires_grad = False
+        if self.logit_bias is not None:
+            self.logit_bias.requires_grad = False
+
     def lock_image_tower(self, unlocked_groups=0, freeze_bn_stats=False):
         # lock image tower as per LiT - https://arxiv.org/abs/2111.07991
         self.visual.lock(unlocked_groups=unlocked_groups, freeze_bn_stats=freeze_bn_stats)

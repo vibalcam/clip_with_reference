@@ -150,7 +150,7 @@
                 "--model", "ViT-B-16", 
                 "--distill-model", "ViT-B-32",
                 "--distill-pretrained", "openai",
-                "--distill-mode", "feature",
+                "--distill-mode", "interactive",
                 "--distill-weight", "0.5",
                 "--name", "DEBUG", 
                 "--seed", "2025", 
@@ -168,8 +168,10 @@
                 "--gamma_decay_epochs", "30", 
                 "--debug",
                 "--skip-pretrain-eval",
-                "--lock-text",
-                "--init-from-distilled"
+                // "--lock-text",
+                // "--init-from-distilled",
+                "--temperature", "0.01",
+                "--lock-logit-scale"
             ]
         }
 
