@@ -666,6 +666,278 @@ class FastCLIPLoss(nn.Module):
         else:
             return loss
 
+
+class GlobalFastCLIPDistillLoss(FastCLIPLoss):
+    def __init__(self,
+                 distill_mode:str,
+                 distill_weight:float,
+                 data_size: int,
+                 gamma: float,
+                 gamma_schedule: str = "constant",
+                 gamma_decay_epochs: int = -1,
+                 rho: float = 8.0,
+                 eps: float = 1e-14,
+                 multiply_tau: bool = True,
+                 cache_mask: bool = True,
+                 device: torch.device = torch.device("cuda"),
+                 ):
+        """Create an instance of Global Contrastive Loss with global temperature parameter."""
+        super(GlobalFastCLIPDistillLoss, self).__init__(
+            data_size=data_size,
+            gamma=gamma,
+            gamma_schedule=gamma_schedule,
+            gamma_decay_epochs=gamma_decay_epochs,
+            rho=rho,
+            eps=eps,
+            multiply_tau=multiply_tau,
+            cache_mask=cache_mask,
+            device=device,
+        )
+
+        assert distill_mode in ['gcrd', 'gicl']
+        self.distill_type = distill_mode
+        self.distill_weight = distill_weight
+        
+        if distill_mode in ['gicl', 'gcrd']:
+            self.u_t_im = torch.zeros(data_size, device=torch.device("cpu")).reshape(-1, 1)
+            self.u_t_tt = torch.zeros(data_size, device=torch.device("cpu")).reshape(-1, 1)
+        else:
+            raise NotImplementedError(f"Distillation type {distill_mode} not implemented.")
+
+    def adjust_hyperparams(self, epoch: int):
+        super().adjust_hyperparams(epoch)
+
+    def set_params(self,
+                   image_idx: Optional[Tensor] = None, text_idx: Optional[Tensor] = None,
+                   u_im: Optional[Tensor] = None, u_tt: Optional[Tensor] = None,
+                   u_t_im: Optional[Tensor] = None, u_t_tt: Optional[Tensor] = None,
+                   **kwargs
+                   ):
+        src_im_list = [u_im, u_t_im]
+        dst_im_list = [self.u_im, self.u_t_im]
+        src_tt_list = [u_tt, u_t_tt]
+        dst_tt_list = [self.u_tt, self.u_t_tt]
+        for src_im, dst_im in zip(src_im_list, dst_im_list):
+            if src_im is not None:
+                assert image_idx is not None and dst_im.device == image_idx.device
+                dst_im[image_idx] = src_im.to("cpu")
+        for src_tt, dst_tt in zip(src_tt_list, dst_tt_list):
+            if src_tt is not None:
+                assert text_idx is not None and dst_tt.device == text_idx.device
+                dst_tt[text_idx] = src_tt.to("cpu")
+
+    def pairwise_loss(self,
+                      features1: Tuple[Tensor, Tensor],
+                      features2: Tuple[Tensor, Tensor],
+                      logit_scale_im: Tensor,
+                      offset: int = 0,
+                      sim: Optional[Tuple[Tensor, Tensor]] = None,
+                      logit_scale_tt: Optional[Tensor] = None,
+                      bounds: Optional[Tuple[Tensor, Tensor]] = None,
+                      update_bounds: bool = True,
+                      ):
+        image_features1, text_features1 = features1[0], features1[1]
+        image_features2, text_features2 = features2[0], features2[1]
+        if logit_scale_tt is None:
+            logit_scale_tt = logit_scale_im
+
+        batch_size1 = image_features1.shape[0]  # b1
+        batch_size2 = image_features2.shape[0]  # b2
+
+        if sim is not None:
+            sim_image, sim_text = sim[0], sim[1]
+        else:
+            sim_image = image_features1 @ text_features2.T  # shape [b1, b2]
+            sim_text = text_features1 @ image_features2.T  # shape [b1, b2]
+        diag_sim = torch.sum(torch.mul(image_features1, text_features1), dim=-1, keepdim=True)
+
+        diff_image = (sim_image - diag_sim).mul(logit_scale_im)
+        diff_text = (sim_text - diag_sim).mul(logit_scale_tt)
+        bounds_image, bounds_text = None, None
+        if bounds is not None:
+            bounds_image, bounds_text = bounds[0], bounds[1]
+            if update_bounds:
+                bounds_image = torch.maximum(
+                    bounds_image, torch.max(diff_image, dim=-1, keepdim=True).values.detach())
+                bounds_text = torch.maximum(
+                    bounds_text, torch.max(diff_text, dim=-1, keepdim=True).values.detach())
+            diff_image = diff_image.sub(bounds_image)
+            diff_text = diff_text.sub(bounds_text)
+        exp_diff_image = torch.exp(diff_image)
+        exp_diff_text = torch.exp(diff_text)
+
+        if batch_size1 <= batch_size2:
+            mask, mask_inv = self.get_mask(batch_size1, batch_size2, offset)
+        else:
+            mask, mask_inv = self.get_mask(batch_size2, batch_size1, offset)
+            mask, mask_inv = mask.T, mask_inv.T
+        exp_diff_image = torch.mul(exp_diff_image, mask)
+        exp_diff_text = torch.mul(exp_diff_text, mask)
+
+        if batch_size1 <= batch_size2:
+            real_weights_sum = batch_size2 - 1
+        else:
+            real_weights_sum = batch_size2 * (batch_size1 - 1) / batch_size1
+        loss_image = torch.sum(exp_diff_image, dim=-1, keepdim=True) / real_weights_sum
+        loss_text = torch.sum(exp_diff_text, dim=-1, keepdim=True) / real_weights_sum
+
+        results = {
+            "loss_image": loss_image, "loss_text": loss_text, "sim_image": sim_image, "sim_text": sim_text,
+            "exp_diff_image": exp_diff_image, "exp_diff_text": exp_diff_text, "diff_image": diff_image,
+            "diff_text": diff_text, "bounds_image": bounds_image, "bounds_text": bounds_text,
+        }
+
+        return results
+
+    def local(self,
+              features: Tuple[Tensor, Tensor],
+              indices: Tuple[Tensor, Tensor],
+              remote_features: Tuple[Tensor, Tensor],
+              logit_scale: Tensor,
+              offset: int,
+              dist_features: Optional[Tuple[Tensor, Tensor]],
+              remote_dist_features: Optional[Tuple[Tensor, Tensor]],
+              ):
+        local_results = super().local(
+            features, indices, remote_features, logit_scale, offset=offset)
+
+        image_idx, text_idx = indices[0], indices[1]
+        u_im = self.get_params(image_idx, self.u_t_im)[0]
+        u_tt = self.get_params(text_idx, self.u_t_tt)[0]
+
+        if self.distill_type == 'gicl':
+            results = self.pairwise_loss(features, remote_dist_features, logit_scale, offset=offset)
+            loss1_im, loss1_tt = results["loss_image"], results["loss_text"]
+            sim_im, sim_tt = results["sim_image"], results["sim_text"]
+
+            g_im = loss1_im.detach()
+            g_tt = loss1_tt.detach()
+            if self.gamma < 1.0:
+                bad_im_idx = torch.nonzero(
+                    (u_im < 1e-35).logical_or(u_im.isinf()).logical_or(u_im.isnan()), as_tuple=True)[0]
+                bad_tt_idx = torch.nonzero(
+                    (u_tt < 1e-35).logical_or(u_tt.isinf()).logical_or(u_tt.isnan()), as_tuple=True)[0]
+            u_im = (1.0 - self.gamma) * u_im + self.gamma * g_im
+            u_tt = (1.0 - self.gamma) * u_tt + self.gamma * g_tt
+            if self.gamma < 1.0:
+                if bad_im_idx.shape[0] > 0:
+                    u_im[bad_im_idx] = g_im[bad_im_idx].to(u_im.dtype)
+                if bad_tt_idx.shape[0] > 0:
+                    u_tt[bad_tt_idx] = g_tt[bad_tt_idx].to(u_tt.dtype)
+
+            local_results[-1].extend([u_im, u_tt])
+            dist_dict = {
+                'dis_loss1': [loss1_im, loss1_tt],
+                'dis_sim': [sim_im, sim_tt],
+                'dis_u': [u_im, u_tt],
+            }
+            local_results = local_results + (dist_dict,)
+            return local_results
+        elif self.distill_type == 'gcrd':
+            raise NotImplementedError
+        
+            # teacher features
+            dist_im_features, dist_text_features = dist_features[0], dist_features[1]
+            dist_remote_im_features, dist_remote_text_features = remote_dist_features[0], remote_dist_features[1]
+            sim_t_im = (dist_im_features @ dist_remote_text_features.T) * logit_scale
+            sim_t_tt = (dist_text_features @ dist_remote_im_features.T) * logit_scale
+            exp_im = torch.exp(sim_t_im).detach()
+            exp_tt = torch.exp(sim_t_tt).detach()
+
+            batch_size1 = dist_im_features.shape[0]  # b1
+            batch_size2 = dist_remote_im_features.shape[0]  # b2
+
+            # teacher probs
+            g_im = exp_im.sum(dim=-1, keepdim=True) / batch_size2
+            g_tt = exp_tt.sum(dim=-1, keepdim=True) / batch_size2
+            if self.gamma < 1.0:
+                bad_im_idx = torch.nonzero(
+                    (u_im < 1e-35).logical_or(u_im.isinf()).logical_or(u_im.isnan()), as_tuple=True)[0]
+                bad_tt_idx = torch.nonzero(
+                    (u_tt < 1e-35).logical_or(u_tt.isinf()).logical_or(u_tt.isnan()), as_tuple=True)[0]
+            u_im = (1.0 - self.gamma) * u_im + self.gamma * g_im
+            u_tt = (1.0 - self.gamma) * u_tt + self.gamma * g_tt
+            if self.gamma < 1.0:
+                if bad_im_idx.shape[0] > 0:
+                    u_im[bad_im_idx] = g_im[bad_im_idx].to(u_im.dtype)
+                if bad_tt_idx.shape[0] > 0:
+                    u_tt[bad_tt_idx] = g_tt[bad_tt_idx].to(u_tt.dtype)
+            local_results[-1].extend([u_im, u_tt])
+
+            p_t_im = exp_im / (u_im + self.eps)
+            p_t_tt = exp_tt / (u_tt + self.eps)
+
+            # student features
+            im_features, text_features = features[0], features[1]
+            remote_im_features, remote_text_features = remote_features[0], remote_features[1]
+
+            exp_im = ((im_features @ remote_text_features.T) * logit_scale).exp()
+            exp_tt = ((text_features @ remote_im_features.T) * logit_scale).exp()
+
+            if batch_size1 <= batch_size2:
+                mask, mask_inv = self.get_mask(batch_size1, batch_size2, offset)
+            else:
+                mask, mask_inv = self.get_mask(batch_size2, batch_size1, offset)
+                mask, mask_inv = mask.T, mask_inv.T
+
+            # sim_t_im
+            # exp_im.mean(dim=-1, keepdim=True) / ((self.data_size - 1) * u_s_im +)
+
+
+            gather_list = [u_im, u_tt]
+
+        else:
+            raise NotImplementedError(f"Distillation type {self.distill_type} not implemented.")
+
+    def forward(self,
+                features: Tuple[Tensor, Tensor],
+                remote_features: Tuple[Tensor, Tensor],
+                remote_u: Tuple[Tensor, Tensor],
+                loss1: Tuple[Tensor, Tensor],
+                u: Tuple[Tensor, Tensor],
+                sim: Tuple[Tensor, Tensor],
+                logit_scale: Tensor,
+                offset: int,
+                dist_features,
+                remote_dist_features,
+                dist_u,
+                dist_loss1,
+                remote_dist_u,
+                dis_sim,
+                output_dict: bool = False,
+                **kwargs
+                ):
+        results_clip = super().forward(
+            features, remote_features, remote_u, loss1, u, sim, logit_scale, offset=offset,output_dict=output_dict)
+
+        remote_u_im, remote_u_tt = remote_dist_u[0], remote_dist_u[1]
+        loss1_im, loss1_tt = dist_loss1[0], dist_loss1[1]
+        u_im, u_tt = dist_u[0], dist_u[1]
+
+        results = self.pairwise_loss(remote_dist_features, features, logit_scale, offset=offset, sim=dis_sim)
+        loss2_im, loss2_tt = results["loss_image"], results["loss_text"]
+
+        partial_grad1_im = loss1_im / (u_im + self.eps)
+        partial_grad1_tt = loss1_tt / (u_tt + self.eps)
+        partial_grad2_im = loss2_im / (remote_u_im + self.eps)
+        partial_grad2_tt = loss2_tt / (remote_u_tt + self.eps)
+        loss = (torch.mean(partial_grad1_im + partial_grad1_tt) + 
+                torch.mean(partial_grad2_im + partial_grad2_tt)) / 2
+        if self.multiply_tau:
+            loss = loss / logit_scale.detach()
+            loss = loss + self.rho / logit_scale
+            loss = loss + torch.mean(torch.log(u_im) + torch.log(u_tt)) / 2 / logit_scale
+
+        if output_dict:
+            results_clip.update({
+                "distill_loss": loss, 
+                "loss": results_clip["contrastive_loss"] + self.distill_weight * loss,
+            })
+            return results_clip
+        else:
+            return results_clip + self.distill_weight * loss, loss
+
+
 class FastCLIPDistillLoss(FastCLIPLoss, DistillClipLoss):
 
     def __init__(self, 

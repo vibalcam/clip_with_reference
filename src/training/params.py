@@ -456,6 +456,13 @@ def parse_args(args):
         choices=['cross_entropy', 'feature', 'kl', 'interactive']
     )
     parser.add_argument(
+        "--global_distill_mode",
+        type=str,
+        default=None,
+        help='Which distillation mode to use, if any.',
+        choices=['gicl', 'gcrd']
+    )
+    parser.add_argument(
         "--distill-weight",
         type=float,
         default=None, 

@@ -117,13 +117,30 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     with torch.no_grad():
                         dist_model_out = dist_model(images, texts)
                     model_out.update({f'dist_{k}': v for k, v in dist_model_out.items()})
-                    model_out["dist_features"] = [model_out["dist_image_features"], model_out["dist_text_features"]]
+                    dist_features = [model_out["dist_image_features"], model_out["dist_text_features"]]
+                    model_out["dist_features"] = dist_features
+                    remote_dist_features = all_gather_tuple_tensor(dist_features, None)
                 if args.fastclip:
                     features = [model_out["image_features"], model_out["text_features"]]
                     remote_features = all_gather_tuple_tensor(features, None)
                     local_args = {"features": features, "indices": indices, "remote_features": remote_features,
                                   "logit_scale": logit_scale, "offset": offset}
-                    loss1_im, loss1_tt, sim_im, sim_tt, gather_list = loss.local(**local_args)
+                    
+                    if args.global_distill_mode is not None:
+                        local_args.update({"dist_features": dist_features, "remote_dist_features": remote_dist_features})
+
+                    if args.global_distill_mode is not None:
+                        loss1_im, loss1_tt, sim_im, sim_tt, gather_list, dist_dict = loss.local(**local_args)
+                        dis_loss1 = dist_dict["dis_loss1"]
+                        dis_sim = dist_dict["dis_sim"]
+                        dis_sim = (dis_sim[1].T, dis_sim[0].T)
+                        dis_u = dist_dict["dis_u"]
+
+                        # dis_loss1 = distill_list[0:2]
+                        # dis_sim = (distill_list[3].T, distill_list[2].T)
+                        # dis_u = gather_list[2:4]
+                    else:
+                        loss1_im, loss1_tt, sim_im, sim_tt, gather_list = loss.local(**local_args)
                     # here sim_im is local_im vs. global_tt, sim_tt is local_tt vs. global_im
                     sim = (sim_tt.T, sim_im.T)
                     u = gather_list[0:2]
@@ -134,6 +151,11 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                     remote_indices[1] = remote_indices[1].squeeze(-1).to(device="cpu", dtype=torch.int64)
                     loss.set_params(*remote_indices, *remote_gather_list)
                     remote_u = remote_gather_list[0:2]
+                    if args.global_distill_mode is not None:
+                        remote_dist_u = remote_gather_list[2:4]
+                        model_out.update({
+                            "dist_u": dis_u, "dist_loss1": dis_loss1,
+                            "remote_dist_u": remote_dist_u, "dis_sim": dis_sim})
                     if "individual" in args.temperature_scheme:
                         remote_bounds = remote_gather_list[4:6]
                         remote_tau = remote_gather_list[6:8]
@@ -142,6 +164,9 @@ def train_one_epoch(model, data, loss, epoch, optimizer, scaler, scheduler, dist
                         {"features": features, "remote_features": remote_features, "remote_u": remote_u})
                     model_out.update(
                         {"offset": offset, "loss1": (loss1_im, loss1_tt), "u": u, "sim": sim})
+                    if args.distill:
+                        model_out.update(
+                            {"dist_features": dist_features, "remote_dist_features": remote_dist_features})
                 losses = loss(**model_out, output_dict=True)
                 if args.distill and args.fastclip:
                     total_loss = losses["loss"]
