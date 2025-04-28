@@ -140,6 +140,9 @@ CUDA_VISIBLE_DEVICES=2,3 python -m torch.distributed.run --nproc_per_node=2 --nn
 CUDA_VISIBLE_DEVICES=2,3 python -m torch.distributed.run --nproc_per_node=2 --nnodes=1 --node_rank=0 --rdzv-id=4204 --rdzv-backend=c10d --rdzv-endpoint='127.0.0.1:29300' src/training/main.py --save-frequency 1 --train-data "./datasets/dfn_data/00000{000..139}.tar" --datacomp-path ./datasets/datacomp --train-num-samples 1000000 --data_size 1400000 --warmup 500 --batch-size 320 --epochs 30 --workers 6 --model ViT-B-16 --distill-model ViT-B-32 --distill-pretrained openai --distill-mode feature --distill-weight 0.5 --name fastclip_dist0.5feature_lockLogit100_4xLR_3xWD_dive9_v0 --seed 2025 --wd 0.6 --local-loss --fastclip --multiply_tau --temperature_scheme global_learnable --lr 0.00125 --lr_tau 7.8125e-5 --lr_tau_scheduler step_thresh --rho 11.0 --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 30 --report-to tensorboard --temperature 0.01 --lock-logit-scale
 ```
 
+![](image-1.png)
+![](image-2.png)
+
 
 # FastCLIP + 0.5 Feature Distillation, init from distilled model + freeze text tower + 3xlr + 2xWD
 
