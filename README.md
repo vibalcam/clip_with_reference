@@ -6,7 +6,7 @@ In this repo, we show how to train a CLIP model by using Global Contrastive Loss
 
 Our best model (FD+Init. from teacher) is available [here](https://huggingface.co/jacob-helwig/clip_with_reference/blob/main/fastclip_dist0.5feature_teacherInit_ImageNet_1k%3D0.5684-MSCOCO%3D0.3744.pt).
 
-Our second best model (FD+frozen temp.+$3\eta$+$3\omega$) is available [here](https://huggingface.co/jacob-helwig/clip_with_reference/blob/main/fastclip_dist0.5feature_lockLogit100_3xLR_3xWD_ImageNet_1k%3D0.39926-MSCOCO%3D0.2180.pt).
+Our second best model (FD+frozen temp.+ $3\eta$ + $3\omega$) is available [here](https://huggingface.co/jacob-helwig/clip_with_reference/blob/main/fastclip_dist0.5feature_lockLogit100_3xLR_3xWD_ImageNet_1k%3D0.39926-MSCOCO%3D0.2180.pt).
 
 ![](notebooks/plots/InitFromTeachervsFeatureDistillationwFrozenTemp3timesLRand3timesWD.png)
 
