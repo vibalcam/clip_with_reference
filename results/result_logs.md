@@ -66,6 +66,17 @@ CUDA_VISIBLE_DEVICES=0,7 python -m torch.distributed.run --nproc_per_node=2 --nn
 ```
 CUDA_VISIBLE_DEVICES=3,4 python -m torch.distributed.run --nproc_per_node=2 --nnodes=1 --node_rank=0 --rdzv-id=4204 --rdzv-backend=c10d --rdzv-endpoint='127.0.0.1:29400' src/training/main.py --save-frequency 1 --train-data "./datasets/dfn_data/00000{000..139}.tar" --datacomp-path ./datasets/datacomp --train-num-samples 1000000 --data_size 1400000 --warmup 500 --batch-size 320 --epochs 30 --workers 6 --model ViT-B-16 --distill-model ViT-B-32 --distill-pretrained openai --distill-mode feature --distill-weight 0.5 --name fastclip_dist0.5feature_teacherInit_dive9_v0 --seed 2025 --wd 0.2 --local-loss --fastclip --multiply_tau --temperature_scheme global_learnable --lr 3.125e-4 --lr_tau 7.8125e-5 --lr_tau_scheduler step_thresh --rho 11.0 --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 30 --report-to tensorboard --init-from-distilled
 ```
+
+```
+train_output_dir='/mnt/data/shared/jacob/clip_with_reference/logs/fastclip_dist0.5feature_teacherInit_dive9_v0/fastclip_dist0.5feature_teacherInit_dive9_v0'
+data_dir='/mnt/data/shared/jacob/clip_with_reference/datasets/datacomp'
+arch='ViT-B-16'
+epoch=30
+
+CUDA_VISIBLE_DEVICES=7 python ./datacomp/evaluate.py --train_output_dir "${train_output_dir}" --data_dir "${data_dir}" --epoch "${epoch}" --arch "${arch}"
+```
+
+
 ![](tb/teacherInit/train.png)
 ![](tb/teacherInit/eval.png)
 
@@ -132,6 +143,15 @@ CUDA_VISIBLE_DEVICES=2,3,4,5,6 python -m torch.distributed.run --nproc_per_node=
 
 ```
 CUDA_VISIBLE_DEVICES=2,3 python -m torch.distributed.run --nproc_per_node=2 --nnodes=1 --node_rank=0 --rdzv-id=4204 --rdzv-backend=c10d --rdzv-endpoint='127.0.0.1:29300' src/training/main.py --save-frequency 1 --train-data "./datasets/dfn_data/00000{000..139}.tar" --datacomp-path ./datasets/datacomp --train-num-samples 1000000 --data_size 1400000 --warmup 500 --batch-size 320 --epochs 30 --workers 6 --model ViT-B-16 --distill-model ViT-B-32 --distill-pretrained openai --distill-mode feature --distill-weight 0.5 --name fastclip_dist0.5feature_lockLogit100_3xLR_3xWD_dive9_v0 --seed 2025 --wd 0.6 --local-loss --fastclip --multiply_tau --temperature_scheme global_learnable --lr 9.375e-4 --lr_tau 7.8125e-5 --lr_tau_scheduler step_thresh --rho 11.0 --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 30 --report-to tensorboard --temperature 0.01 --lock-logit-scale
+```
+
+```
+train_output_dir='/mnt/data/shared/jacob/clip_with_reference/logs/fastclip_dist0.5feature_lockLogit100_3xLR_3xWD_dive9_v0'
+data_dir='/mnt/data/shared/jacob/clip_with_reference/datasets/datacomp'
+arch='ViT-B-16'
+epoch=29
+
+CUDA_VISIBLE_DEVICES=6 python ./datacomp/evaluate.py --train_output_dir "${train_output_dir}" --data_dir "${data_dir}" --epoch "${epoch}" --arch "${arch}"
 ```
 
 # FastCLIP + 0.5 Feature Distillation + lock logit scale to 100 + 4xlr + 3xWD
